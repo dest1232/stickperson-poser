@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Stickperson Poser</title>
+    <link rel="stylesheet" href="/src/styles.css?v=icon-buttons" />
+    <script type="importmap">
+      {
+        "imports": {
+          "three": "https://unpkg.com/three@0.178.0/build/three.module.js",
+          "three/addons/": "https://unpkg.com/three@0.178.0/examples/jsm/"
+        }
+      }
+    </script>
+  </head>
+  <body>
+    <svg class="iconSprite" aria-hidden="true">
+      <symbol id="icon-mesh" viewBox="0 0 24 24">
+        <path d="M4 7.5 12 3l8 4.5v9L12 21l-8-4.5z" />
+        <path d="M12 12 4.4 7.7M12 12l7.6-4.3M12 12v8.5" />
+      </symbol>
+      <symbol id="icon-skeleton" viewBox="0 0 24 24">
+        <circle cx="12" cy="5" r="2.5" />
+        <circle cx="6" cy="19" r="2.5" />
+        <circle cx="18" cy="19" r="2.5" />
+        <path d="M12 7.5v5M12 12.5 6 16.5M12 12.5l6 4" />
+      </symbol>
+      <symbol id="icon-grid" viewBox="0 0 24 24">
+        <path d="M4 4h16v16H4zM4 9.3h16M4 14.7h16M9.3 4v16M14.7 4v16" />
+      </symbol>
+      <symbol id="icon-new" viewBox="0 0 24 24">
+        <path d="M12 5v14M5 12h14" />
+      </symbol>
+      <symbol id="icon-undo" viewBox="0 0 24 24">
+        <path d="M9 7 4 12l5 5" />
+        <path d="M5 12h9a5 5 0 1 1 0 10h-1" />
+      </symbol>
+      <symbol id="icon-save" viewBox="0 0 24 24">
+        <path d="M5 4h12l2 2v14H5z" />
+        <path d="M8 4v6h8V4M8 20v-6h8v6" />
+      </symbol>
+      <symbol id="icon-load" viewBox="0 0 24 24">
+        <path d="M12 4v12" />
+        <path d="M7 9l5-5 5 5M5 20h14" />
+      </symbol>
+      <symbol id="icon-reset" viewBox="0 0 24 24">
+        <path d="M20 12a8 8 0 1 1-2.3-5.7" />
+        <path d="M20 4v6h-6" />
+      </symbol>
+      <symbol id="icon-fill" viewBox="0 0 24 24">
+        <path d="M4 4h16v16H4z" />
+      </symbol>
+      <symbol id="icon-phone-portrait" viewBox="0 0 24 24">
+        <path d="M8 3h8v18H8z" />
+        <path d="M11 18h2" />
+      </symbol>
+      <symbol id="icon-phone-landscape" viewBox="0 0 24 24">
+        <path d="M3 8h18v8H3z" />
+        <path d="M18 11v2" />
+      </symbol>
+      <symbol id="icon-tablet-portrait" viewBox="0 0 24 24">
+        <path d="M6 2.5h12v19H6z" />
+        <path d="M11 18.5h2" />
+      </symbol>
+      <symbol id="icon-tablet-landscape" viewBox="0 0 24 24">
+        <path d="M2.5 6h19v12h-19z" />
+        <path d="M18.5 11v2" />
+      </symbol>
+    </svg>
+    <main class="appShell">
+      <section id="stageWrap" class="stageWrap viewportFill">
+        <div id="viewer" class="viewer">
+          <div id="loading" class="loading">Loading</div>
+
+          <div class="viewportOverlay" aria-label="Viewport options">
+            <div class="overlayGroup">
+              <button id="meshToggle" type="button" class="toggle active iconButton" aria-pressed="true" aria-label="Mesh" title="Mesh"><svg><use href="#icon-mesh"></use></svg></button>
+              <button id="skeletonToggle" type="button" class="toggle iconButton" aria-pressed="false" aria-label="Skeleton" title="Skeleton"><svg><use href="#icon-skeleton"></use></svg></button>
+              <button id="gridToggle" type="button" class="toggle active iconButton" aria-pressed="true" aria-label="Grid" title="Grid"><svg><use href="#icon-grid"></use></svg></button>
+            </div>
+
+            <div class="overlayGroup buttonRow poseActions" aria-label="Pose actions">
+              <button id="newPose" type="button" class="iconButton" aria-label="New pose" title="New pose"><svg><use href="#icon-new"></use></svg></button>
+              <button id="undoPose" type="button" class="iconButton" disabled aria-label="Undo" title="Undo"><svg><use href="#icon-undo"></use></svg></button>
+              <button id="savePose" type="button" class="iconButton" aria-label="Save pose" title="Save pose"><svg><use href="#icon-save"></use></svg></button>
+              <button id="loadPose" type="button" class="iconButton" disabled aria-label="Load pose" title="Load pose"><svg><use href="#icon-load"></use></svg></button>
+              <button id="resetPose" type="button" class="iconButton" aria-label="Reset pose" title="Reset pose"><svg><use href="#icon-reset"></use></svg></button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <aside class="panel" aria-label="Pose actions">
+        <div class="panelHeader">
+          <span class="icon">o</span>
+          <div>
+            <h1>Stickperson Poser</h1>
+            <p id="status">Loading model</p>
+          </div>
+        </div>
+
+        <div class="viewportButtons" aria-label="Viewport presets">
+          <button type="button" class="active iconButton" data-viewport="fill" title="Fill" aria-label="Fill"><svg><use href="#icon-fill"></use></svg></button>
+          <button type="button" class="iconButton" data-viewport="phonePortrait" title="Phone portrait" aria-label="Phone portrait"><svg><use href="#icon-phone-portrait"></use></svg></button>
+          <button type="button" class="iconButton" data-viewport="phoneLandscape" title="Phone landscape" aria-label="Phone landscape"><svg><use href="#icon-phone-landscape"></use></svg></button>
+          <button type="button" class="iconButton" data-viewport="tabletPortrait" title="Tablet portrait" aria-label="Tablet portrait"><svg><use href="#icon-tablet-portrait"></use></svg></button>
+          <button type="button" class="iconButton" data-viewport="tabletLandscape" title="Tablet landscape" aria-label="Tablet landscape"><svg><use href="#icon-tablet-landscape"></use></svg></button>
+        </div>
+
+        <div class="rigInternals" aria-hidden="true">
+          <select id="jointSelect" tabindex="-1"></select>
+          <button id="moveTool" type="button" class="active" tabindex="-1">Move</button>
+          <button id="rotateTool" type="button" tabindex="-1">Rotate</button>
+          <input id="rotX" min="-180" max="180" step="1" type="range" value="0" tabindex="-1" />
+          <output id="rotXOut">0 deg</output>
+          <input id="rotY" min="-180" max="180" step="1" type="range" value="0" tabindex="-1" />
+          <output id="rotYOut">0 deg</output>
+          <input id="rotZ" min="-180" max="180" step="1" type="range" value="0" tabindex="-1" />
+          <output id="rotZOut">0 deg</output>
+        </div>
+      </aside>
+    </main>
+    <script type="module" src="/src/main.js?v=hide-pole-vectors"></script>
+  </body>
+</html>

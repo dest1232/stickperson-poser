@@ -1,0 +1,12 @@
+{
+  "name": "stickperson-poser",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "python -m http.server 5173 --bind 127.0.0.1",
+    "sync:ios-assets": "powershell -ExecutionPolicy Bypass -File scripts/sync-ios-assets.ps1"
+  },
+  "dependencies": {},
+  "devDependencies": {}
+}

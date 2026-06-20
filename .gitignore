@@ -1,0 +1,31 @@
+# Dependencies
+node_modules/
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Local environment
+.env
+.env.*
+
+# OS/editor files
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Build output
+dist/
+build/
+DerivedData/
+
+# Xcode user state
+*.xcuserstate
+xcuserdata/
+
+# Swift Package Manager
+.build/
+
