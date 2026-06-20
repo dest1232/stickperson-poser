@@ -35,11 +35,30 @@ The web app remains the fastest place to iterate on rig behavior and visual inte
    - IK solve behavior: `IKSolver.swift`
    - scene visuals or controls: `PoseSceneController.swift` and `ContentView.swift`
 
-4. Commit or copy the full repo to the MacBook.
+4. Commit and push to GitHub:
+
+   ```powershell
+   git add .
+   git commit -m "Update stickperson poser"
+   git push
+   ```
 
 ## MacBook Build / Publish Loop
 
-1. Pull/copy the latest repo.
+1. First time on the MacBook, clone the repo:
+
+   ```sh
+   git clone https://github.com/dest1232/stickperson-poser.git
+   cd stickperson-poser
+   ```
+
+   On later visits, pull the latest Windows changes:
+
+   ```sh
+   cd /path/to/stickperson-poser
+   git pull
+   ```
+
 2. Convert the synced GLB to USDZ:
 
    ```sh
@@ -73,4 +92,3 @@ After any web change, answer these before publishing native:
 ## Current Known Native Gap
 
 This Windows workspace cannot generate a real `stickman_default.usdz`. The checked-in USDZ is a placeholder so the Xcode project has a stable file reference. Always replace it on macOS before running the app.
-

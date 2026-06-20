@@ -2,6 +2,12 @@
 
 This repo contains the Windows-friendly web prototype and a native iPhone/iPad app scaffold.
 
+GitHub repo:
+
+```text
+https://github.com/dest1232/stickperson-poser
+```
+
 ## Web Prototype
 
 Run locally on Windows:
@@ -22,6 +28,19 @@ The native SwiftUI + SceneKit app lives in:
 
 ```text
 ios/StickpersonPoser/
+```
+
+First time on the MacBook:
+
+```sh
+git clone https://github.com/dest1232/stickperson-poser.git
+cd stickperson-poser
+```
+
+After future Windows updates:
+
+```sh
+git pull
 ```
 
 When the GLB changes on Windows, sync it into the iOS project:
