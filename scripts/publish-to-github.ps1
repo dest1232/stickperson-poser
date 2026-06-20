@@ -41,8 +41,13 @@ if ($currentBranch -ne "main") {
   git branch -M main
 }
 
+$previousErrorActionPreference = $ErrorActionPreference
+$ErrorActionPreference = "Continue"
 gh repo view $repoFullName *> $null
-if ($LASTEXITCODE -ne 0) {
+$repoViewExitCode = $LASTEXITCODE
+$ErrorActionPreference = $previousErrorActionPreference
+
+if ($repoViewExitCode -ne 0) {
   Write-Host "Creating GitHub repository $repoFullName..."
   gh repo create $repoFullName --$Visibility --source . --remote origin --push
 } else {
