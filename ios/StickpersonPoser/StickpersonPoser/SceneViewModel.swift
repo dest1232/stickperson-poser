@@ -4,7 +4,7 @@ import Foundation
 final class SceneViewModel: ObservableObject {
     @Published var status: String = "Loading model"
     @Published var showMesh: Bool = true
-    @Published var showSkeleton: Bool = false
+    @Published var showSkeleton: Bool = true
     @Published var showGrid: Bool = true
     @Published var canUndo: Bool = false
     @Published var canLoad: Bool = PoseStore.hasSavedPose
@@ -17,15 +17,20 @@ final class SceneViewModel: ObservableObject {
     }
 
     func setStatus(_ value: String) {
-        status = value
+        DispatchQueue.main.async { [weak self] in
+            self?.status = value
+        }
     }
 
     func refreshUndoState(_ canUndo: Bool) {
-        self.canUndo = canUndo
+        DispatchQueue.main.async { [weak self] in
+            self?.canUndo = canUndo
+        }
     }
 
     func refreshLoadState() {
-        canLoad = PoseStore.hasSavedPose
+        DispatchQueue.main.async { [weak self] in
+            self?.canLoad = PoseStore.hasSavedPose
+        }
     }
 }
-

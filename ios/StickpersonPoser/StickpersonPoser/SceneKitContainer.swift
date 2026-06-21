@@ -1,6 +1,7 @@
 import SceneKit
 import SwiftUI
 
+@MainActor
 struct SceneKitContainer: UIViewRepresentable {
     @ObservedObject var viewModel: SceneViewModel
 
@@ -16,8 +17,8 @@ struct SceneKitContainer: UIViewRepresentable {
         view.antialiasingMode = .multisampling4X
         view.rendersContinuously = true
 
-        context.coordinator.controller.install(in: view)
         viewModel.attach(context.coordinator.controller)
+        context.coordinator.controller.install(in: view)
 
         let pan = UIPanGestureRecognizer(target: context.coordinator, action: #selector(Coordinator.handlePan(_:)))
         pan.maximumNumberOfTouches = 1
@@ -39,6 +40,7 @@ struct SceneKitContainer: UIViewRepresentable {
         context.coordinator.controller.setGridVisible(viewModel.showGrid)
     }
 
+    @MainActor
     final class Coordinator: NSObject {
         let controller = PoseSceneController()
         private let viewModel: SceneViewModel
@@ -61,4 +63,3 @@ struct SceneKitContainer: UIViewRepresentable {
         }
     }
 }
-

@@ -20,6 +20,24 @@ extension SCNQuaternion {
     }
 }
 
+extension SCNNode {
+    func isDescendant(of ancestor: SCNNode) -> Bool {
+        var current = parent
+        while let node = current {
+            if node === ancestor {
+                return true
+            }
+            current = node.parent
+        }
+        return false
+    }
+
+    func forceWorldTransformUpdate() {
+        _ = worldTransform
+        childNodes.forEach { $0.forceWorldTransformUpdate() }
+    }
+}
+
 func +(lhs: SCNVector3, rhs: SCNVector3) -> SCNVector3 {
     SCNVector3(lhs.x + rhs.x, lhs.y + rhs.y, lhs.z + rhs.z)
 }
@@ -30,6 +48,18 @@ func -(lhs: SCNVector3, rhs: SCNVector3) -> SCNVector3 {
 
 func *(lhs: SCNVector3, rhs: Float) -> SCNVector3 {
     SCNVector3(lhs.x * rhs, lhs.y * rhs, lhs.z * rhs)
+}
+
+func /(lhs: SCNVector3, rhs: Float) -> SCNVector3 {
+    SCNVector3(lhs.x / rhs, lhs.y / rhs, lhs.z / rhs)
+}
+
+func min(_ lhs: SCNVector3, _ rhs: SCNVector3) -> SCNVector3 {
+    SCNVector3(Swift.min(lhs.x, rhs.x), Swift.min(lhs.y, rhs.y), Swift.min(lhs.z, rhs.z))
+}
+
+func max(_ lhs: SCNVector3, _ rhs: SCNVector3) -> SCNVector3 {
+    SCNVector3(Swift.max(lhs.x, rhs.x), Swift.max(lhs.y, rhs.y), Swift.max(lhs.z, rhs.z))
 }
 
 func dot(_ lhs: SCNVector3, _ rhs: SCNVector3) -> Float {
@@ -53,4 +83,3 @@ func normalized(_ value: SCNVector3) -> SCNVector3 {
     guard magnitude > 0.000001 else { return SCNVector3Zero }
     return value * (1 / magnitude)
 }
-

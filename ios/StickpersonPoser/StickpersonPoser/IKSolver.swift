@@ -7,8 +7,8 @@ enum IKSolver {
 
         for _ in 0..<8 {
             for bone in chain {
-                let jointPosition = bone.presentation.worldPosition
-                let endPosition = endBone.presentation.worldPosition
+                let jointPosition = bone.convertPosition(SCNVector3Zero, to: nil)
+                let endPosition = endBone.convertPosition(SCNVector3Zero, to: nil)
                 let toEnd = normalized(endPosition - jointPosition)
                 let toTarget = normalized(target - jointPosition)
 
@@ -34,9 +34,9 @@ enum IKSolver {
         guard chain.count >= 2 else { return }
         let upperBone = chain[1]
         let midBone = chain[0]
-        let rootPosition = upperBone.presentation.worldPosition
-        let midPosition = midBone.presentation.worldPosition
-        let endPosition = endBone.presentation.worldPosition
+        let rootPosition = upperBone.convertPosition(SCNVector3Zero, to: nil)
+        let midPosition = midBone.convertPosition(SCNVector3Zero, to: nil)
+        let endPosition = endBone.convertPosition(SCNVector3Zero, to: nil)
 
         var axis = target - rootPosition
         if length(axis) < 0.000001 {
