@@ -4,6 +4,7 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { TransformControls } from 'three/addons/controls/TransformControls.js';
 
 const MODEL_URL = '/public/stickman_default.glb';
+const BASEPLATE_URL = '/public/default_baseplate.glb';
 const STORAGE_KEY = 'stickperson-poser.savedPose.v1';
 const RAD_TO_DEG = 180 / Math.PI;
 const DEG_TO_RAD = Math.PI / 180;
@@ -13,6 +14,15 @@ const CONTROL_RING_COLOR = 0xd4741f;
 const CONTROL_RING_FILL_COLOR = 0xf4d1ad;
 const CONTROL_RING_SELECTED_COLOR = 0xffc857;
 const CONTROL_RING_SELECTED_FILL_COLOR = 0xffeebc;
+const CONTROL_RING_DISABLED_COLOR = 0x7c746a;
+const CONTROL_RING_DISABLED_FILL_COLOR = 0xd8d0c6;
+const IK_DEFAULT_OPTIONS = {
+  iterations: 10,
+  damping: 0.55,
+  maxAngle: 0.22,
+  poleStrength: 0.7,
+  lockEndRotation: false,
+};
 const stickmanMaterial = new THREE.MeshStandardMaterial({
   color: 0xf0f3f8,
   roughness: 0.74,
@@ -24,8 +34,14 @@ const stageWrap = document.querySelector('#stageWrap');
 const loading = document.querySelector('#loading');
 const status = document.querySelector('#status');
 const jointSelect = document.querySelector('#jointSelect');
+const baseplateToggle = document.querySelector('#baseplateToggle');
+const paintToggle = document.querySelector('#paintToggle');
+const colorPalette = document.querySelector('#colorPalette');
 const moveToolButton = document.querySelector('#moveTool');
 const rotateToolButton = document.querySelector('#rotateTool');
+const positionModeButton = document.querySelector('#positionMode');
+const rotationModeButton = document.querySelector('#rotationMode');
+const colorSwatches = [...document.querySelectorAll('[data-paint-color]')];
 const undoPoseButton = document.querySelector('#undoPose');
 const loadPoseButton = document.querySelector('#loadPose');
 const rotationInputs = {
@@ -52,6 +68,7 @@ const state = {
   basePose: new Map(),
   selectedBone: null,
   model: null,
+  baseplate: null,
   skeletonHelper: null,
   grid: null,
   jointHighlight: null,
@@ -60,6 +77,7 @@ const state = {
   pelvisControlPivot: null,
   controlHandles: [],
   controlHandleByRole: new Map(),
+  positionIkTargets: new Map(),
   selectedController: null,
   controllerPoseBeforeDrag: null,
   controllerPivotBeforeDrag: null,
@@ -73,11 +91,15 @@ const state = {
   sliderChanging: false,
   screenDrag: null,
   undoStack: [],
-  requestedTransformMode: 'translate',
-  currentTransformMode: 'translate',
+  requestedTransformMode: 'rotation',
+  currentTransformMode: 'rotation',
+  selectedPaintColor: '#f0f3f8',
+  selectedPaintLabel: 'White',
+  showColorPalette: false,
   showMesh: true,
   showSkeleton: false,
   showGrid: true,
+  showBaseplate: true,
 };
 
 const scene = new THREE.Scene();
@@ -127,11 +149,13 @@ orbit.enableDamping = true;
 orbit.target.set(0, 0.8, 0);
 
 const transform = new TransformControls(camera, renderer.domElement);
-transform.setMode('translate');
+transform.setMode('rotate');
 transform.setSpace('local');
-transform.setSize(0.475);
+transform.setSize(0.58);
 transform.enabled = false;
 transform.visible = false;
+const transformHelper = transform.getHelper();
+transformHelper.visible = false;
 transform.addEventListener('mouseDown', () => {
   state.transformPointerActive = true;
 });
@@ -164,12 +188,12 @@ transform.addEventListener('dragging-changed', (event) => {
 });
 transform.addEventListener('objectChange', () => {
   state.transformChanged = true;
-  applySelectedControllerRotation();
-  applySelectedControllerTranslation();
-  applySelectedIkController();
+  updateJointControllers();
+  updateJointHighlight();
+  updateSelectedBoneLinks();
   syncRotationUi();
 });
-scene.add(transform.getHelper());
+scene.add(transformHelper);
 
 const highlightMaterial = new THREE.MeshBasicMaterial({
   color: 0xffc857,
@@ -228,10 +252,8 @@ new GLTFLoader().load(
     state.skeletonHelper = new THREE.SkeletonHelper(state.model);
     state.skeletonHelper.visible = state.showSkeleton;
     scene.add(state.skeletonHelper);
-    createPelvisController();
-    createLimbControllers();
-    createTorsoControllers();
-    createPoleVectorControllers();
+    createJointRotationControllers();
+    exposeDebugApi();
 
     populateJointSelect();
     deselectBone();
@@ -248,6 +270,95 @@ new GLTFLoader().load(
   },
 );
 
+new GLTFLoader().load(
+  BASEPLATE_URL,
+  (gltf) => {
+    state.baseplate = gltf.scene;
+    state.baseplate.name = 'Default baseplate';
+    state.baseplate.traverse((node) => {
+      if (node.isMesh) {
+        node.castShadow = false;
+        node.receiveShadow = true;
+        node.frustumCulled = false;
+        if (node.material) {
+          node.material = node.material.clone();
+          node.material.roughness = Math.max(node.material.roughness ?? 0.6, 0.72);
+        }
+      }
+    });
+    const baseplateBox = new THREE.Box3().setFromObject(state.baseplate);
+    const baseplateCenter = baseplateBox.getCenter(new THREE.Vector3());
+    state.baseplate.position.x -= baseplateCenter.x;
+    state.baseplate.position.z -= baseplateCenter.z;
+    state.baseplate.position.y += 0.002 - baseplateBox.max.y;
+    state.baseplate.visible = state.showBaseplate;
+    scene.add(state.baseplate);
+  },
+  undefined,
+  (error) => {
+    console.warn('Could not load default_baseplate.glb', error);
+    if (baseplateToggle) {
+      baseplateToggle.disabled = true;
+      baseplateToggle.classList.remove('active');
+      baseplateToggle.setAttribute('aria-pressed', 'false');
+    }
+  },
+);
+
+function exposeDebugApi() {
+  window.stickpersonPoserDebug = {
+    state,
+    getHandlePosition(role) {
+      return state.controlHandleByRole.get(role)?.position.toArray() || null;
+    },
+    getBoneWorldPosition(pattern) {
+      const regex = pattern instanceof RegExp ? pattern : new RegExp(pattern, 'i');
+      const bone = state.bones.find((candidate) => regex.test(candidate.name));
+      if (!bone) return null;
+      return bone.getWorldPosition(new THREE.Vector3()).toArray();
+    },
+    getBoneWorldQuaternion(pattern) {
+      const regex = pattern instanceof RegExp ? pattern : new RegExp(pattern, 'i');
+      const bone = state.bones.find((candidate) => regex.test(candidate.name));
+      if (!bone) return null;
+      return bone.getWorldQuaternion(new THREE.Quaternion()).toArray();
+    },
+    solveRole(role) {
+      const handle = state.controlHandleByRole.get(role);
+      if (handle) solveHandleIk(handle);
+    },
+    getHandleInfo(role) {
+      const handle = state.controlHandleByRole.get(role);
+      if (!handle) return null;
+      return {
+        role: handle.userData.role,
+        limbType: handle.userData.limbType,
+        targetBone: handle.userData.targetBone?.name,
+        chain: handle.userData.ikChain?.map((bone) => bone.name) || [],
+      };
+    },
+    getSelectionInfo() {
+      return {
+        mode: state.currentTransformMode,
+        requestedMode: state.requestedTransformMode,
+        selectedController: state.selectedController?.userData?.role || null,
+        selectedBone: state.selectedBone?.name || null,
+        dragging: Boolean(state.screenDrag),
+      };
+    },
+    getHandleScreenPosition(role) {
+      const handle = state.controlHandleByRole.get(role);
+      if (!handle) return null;
+      const rect = renderer.domElement.getBoundingClientRect();
+      const projected = handle.position.clone().project(camera);
+      return [
+        rect.left + ((projected.x + 1) / 2) * rect.width,
+        rect.top + ((1 - projected.y) / 2) * rect.height,
+      ];
+    },
+  };
+}
+
 function collectBones(root) {
   const bones = [];
   root.traverse((node) => {
@@ -258,6 +369,31 @@ function collectBones(root) {
 
 function findPelvisBone(bones) {
   return bones.find((bone) => /hips|pelvis/i.test(bone.name)) || bones[0] || null;
+}
+
+function createJointRotationControllers() {
+  state.bones.forEach((bone, index) => {
+    const controller = createControlRing(`${bone.name || `Joint ${index + 1}`} rotation controller`);
+    const semanticRole = getJointSemanticRole(bone);
+    controller.userData.controllerType = 'joint';
+    controller.userData.targetBone = bone;
+    controller.userData.label = bone.name || `Joint ${index + 1}`;
+    controller.userData.role = bone.uuid;
+    controller.userData.semanticRole = semanticRole;
+    bone.getWorldPosition(controller.position);
+    state.controlHandles.push(controller);
+    state.controlHandleByRole.set(bone.uuid, controller);
+    if (semanticRole) state.controlHandleByRole.set(semanticRole, controller);
+    scene.add(controller);
+  });
+}
+
+function getJointSemanticRole(bone) {
+  const name = bone.name || '';
+  if (/hips|pelvis/i.test(name)) return 'hips';
+  if (/leftfoot$/i.test(name)) return 'leftFoot';
+  if (/rightfoot$/i.test(name)) return 'rightFoot';
+  return null;
 }
 
 function createPelvisController() {
@@ -337,6 +473,7 @@ function createLimbControllers() {
     controller.userData.limbType = config.limbType;
     controller.userData.role = config.role;
     controller.userData.parentRole = config.parentRole;
+    controller.userData.ikOptions = getIkOptionsForLimb(config.limbType);
     endBone.getWorldPosition(controller.position);
     state.controlHandles.push(controller);
     state.controlHandleByRole.set(config.role, controller);
@@ -361,11 +498,25 @@ function createTorsoControllers() {
     controller.userData.limbType = config.limbType;
     controller.userData.role = config.role;
     controller.userData.parentRole = config.parentRole;
+    controller.userData.ikOptions = getIkOptionsForLimb(config.limbType);
     endBone.getWorldPosition(controller.position);
     state.controlHandles.push(controller);
     state.controlHandleByRole.set(config.role, controller);
     scene.add(controller);
   });
+}
+
+function getIkOptionsForLimb(limbType) {
+  if (limbType === 'arm') {
+    return { twoBone: true, iterations: 3, damping: 1, maxAngle: 0.75, poleStrength: 1, lockEndRotation: true };
+  }
+  if (limbType === 'leg') {
+    return { twoBone: true, iterations: 4, damping: 1, maxAngle: 0.75, poleStrength: 1, lockEndRotation: true };
+  }
+  if (limbType === 'toe') {
+    return { iterations: 6, damping: 0.34, maxAngle: 0.12, poleStrength: 0.35, lockEndRotation: true };
+  }
+  return { iterations: 8, damping: 0.38, maxAngle: 0.14, poleStrength: 0.55, lockEndRotation: false };
 }
 
 function createPoleVectorControllers() {
@@ -416,14 +567,55 @@ function updateControlHandleVisual(handle, position) {
   const isSelected =
     state.selectedController === handle ||
     (handle.userData.controllerType === 'pelvis' && state.selectedController === state.pelvisControlPivot);
+  const isEnabled = isHandleEnabledForCurrentMode(handle);
   handle.position.copy(position);
   handle.quaternion.copy(camera.quaternion);
-  handle.material.color.setHex(isSelected ? CONTROL_RING_SELECTED_COLOR : CONTROL_RING_COLOR);
-  handle.material.opacity = isSelected ? 1 : 0.9;
-  handle.userData.fill?.material.color.setHex(isSelected ? CONTROL_RING_SELECTED_FILL_COLOR : CONTROL_RING_FILL_COLOR);
+  handle.material.color.setHex(
+    isSelected ? CONTROL_RING_SELECTED_COLOR : isEnabled ? CONTROL_RING_COLOR : CONTROL_RING_DISABLED_COLOR,
+  );
+  handle.material.opacity = isSelected ? 1 : isEnabled ? 0.9 : 0.28;
+  handle.userData.fill?.material.color.setHex(
+    isSelected ? CONTROL_RING_SELECTED_FILL_COLOR : isEnabled ? CONTROL_RING_FILL_COLOR : CONTROL_RING_DISABLED_FILL_COLOR,
+  );
+  if (handle.userData.fill?.material) handle.userData.fill.material.opacity = isEnabled ? 0.72 : 0.16;
+  handle.userData.interactive = isEnabled;
+}
+
+function isHandleEnabledForCurrentMode(handle) {
+  if (state.currentTransformMode === 'rotation') {
+    return handle.userData.controllerType === 'joint';
+  }
+  return canUsePositionIk(handle);
 }
 
 function updateLimbControllers() {
+  state.controlHandles.forEach((handle) => {
+    if (handle.userData.controllerType !== 'joint') return;
+    const targetBone = handle.userData.targetBone;
+    if (!targetBone) return;
+    targetBone.getWorldPosition(handle.position);
+    updateControlHandleVisual(handle, handle.position);
+  });
+}
+
+function updateJointControllers() {
+  state.controlHandles.forEach((handle) => {
+    if (handle.userData.controllerType !== 'joint') return;
+    const targetBone = handle.userData.targetBone;
+    if (!targetBone) return;
+    const ikTarget = state.currentTransformMode === 'position'
+      ? state.positionIkTargets.get(handle.userData.semanticRole)
+      : null;
+    if (ikTarget) {
+      updateControlHandleVisual(handle, ikTarget);
+      return;
+    }
+    targetBone.getWorldPosition(handle.position);
+    updateControlHandleVisual(handle, handle.position);
+  });
+}
+
+function updateInactiveIkControllers() {
   state.controlHandles.forEach((handle) => {
     if (handle.userData.controllerType !== 'ik' && handle.userData.controllerType !== 'pole') return;
     if (handle.userData.controllerType === 'pole') {
@@ -436,7 +628,7 @@ function updateLimbControllers() {
 
 function applySelectedControllerRotation() {
   if (state.selectedController?.userData.controllerType !== 'pelvis') return;
-  if (state.currentTransformMode !== 'rotate') return;
+  if (state.currentTransformMode !== 'rotation') return;
   if (!state.controllerPivotBeforeDrag || !state.controllerBoneBeforeDrag) return;
   const rotationDelta = state.selectedController.quaternion
     .clone()
@@ -446,12 +638,45 @@ function applySelectedControllerRotation() {
 
 function applySelectedControllerTranslation() {
   if (state.selectedController?.userData.controllerType !== 'pelvis') return;
-  if (state.currentTransformMode !== 'translate') return;
+  if (state.currentTransformMode !== 'position') return;
   if (!state.selectedBone?.parent) return;
-  const localPosition = state.selectedController.position.clone();
+  const plantedEndStates = capturePlantedEndStates();
+  const constrainedPosition = constrainPelvisTargetPosition(state.selectedController.position);
+  state.selectedController.position.copy(constrainedPosition);
+  const localPosition = constrainedPosition.clone();
   state.selectedBone.parent.worldToLocal(localPosition);
   state.selectedBone.position.copy(localPosition);
-  applyLegIkTargets();
+  applyLegIkTargets(plantedEndStates);
+}
+
+function constrainPelvisTargetPosition(desiredPosition) {
+  if (!state.pelvisBone) return desiredPosition.clone();
+  const currentPelvisPosition = state.pelvisBone.getWorldPosition(new THREE.Vector3());
+  const constrainedPosition = desiredPosition.clone();
+
+  ['leftFoot', 'rightFoot'].forEach((role) => {
+    const handle = state.controlHandleByRole.get(role);
+    if (!handle?.userData?.ikChain || handle.userData.ikChain.length < 2) return;
+    const upperBone = handle.userData.ikChain[1];
+    const lowerBone = handle.userData.ikChain[0];
+    const endBone = handle.userData.targetBone;
+    const rootPosition = upperBone.getWorldPosition(new THREE.Vector3());
+    const midPosition = lowerBone.getWorldPosition(new THREE.Vector3());
+    const endPosition = endBone.getWorldPosition(new THREE.Vector3());
+    const maxReach = Math.max(rootPosition.distanceTo(midPosition) + midPosition.distanceTo(endPosition) - 0.012, 0.05);
+    const delta = constrainedPosition.clone().sub(currentPelvisPosition);
+    const desiredRootPosition = rootPosition.clone().add(delta);
+    const targetPosition = handle.position;
+    const distance = desiredRootPosition.distanceTo(targetPosition);
+    if (distance <= maxReach) return;
+
+    const rootDirection = desiredRootPosition.clone().sub(targetPosition).normalize();
+    const clampedRootPosition = targetPosition.clone().add(rootDirection.multiplyScalar(maxReach));
+    const correction = clampedRootPosition.sub(desiredRootPosition);
+    constrainedPosition.add(correction);
+  });
+
+  return constrainedPosition;
 }
 
 function applySelectedMoveController() {
@@ -476,7 +701,7 @@ function moveChildControls(parentRole, offset) {
 function applyChildControlSolves(parentRole) {
   getChildControls(parentRole).forEach((child) => {
     if (child.userData.controllerType === 'ik') {
-      solveIk(child.userData.targetBone, child.userData.ikChain, child.position.clone(), child.userData.poleHandle?.position);
+      solveHandleIk(child);
     } else if (child.userData.controllerType === 'pole') {
       applyPoleHandleSolve(child);
     }
@@ -486,12 +711,7 @@ function applyChildControlSolves(parentRole) {
 
 function applySelectedIkController() {
   if (state.selectedController?.userData.controllerType !== 'ik') return;
-  solveIk(
-    state.selectedController.userData.targetBone,
-    state.selectedController.userData.ikChain,
-    state.selectedController.position,
-    state.selectedController.userData.poleHandle?.position,
-  );
+  solveHandleIk(state.selectedController);
 }
 
 function applySelectedPoleController() {
@@ -502,22 +722,63 @@ function applySelectedPoleController() {
 function applyPoleHandleSolve(poleHandle) {
   const ikHandle = state.controlHandleByRole.get(poleHandle.userData.ikRole);
   if (!ikHandle) return;
-  solveIk(ikHandle.userData.targetBone, ikHandle.userData.ikChain, ikHandle.position.clone(), poleHandle.position.clone());
+  solveHandleIk(ikHandle, poleHandle.position.clone());
 }
 
-function applyLegIkTargets() {
-  state.controlHandles.forEach((handle) => {
-    if (handle.userData.controllerType !== 'ik' || handle.userData.limbType !== 'leg') return;
-    solveIk(handle.userData.targetBone, handle.userData.ikChain, handle.position.clone(), handle.userData.poleHandle?.position);
+function capturePlantedEndStates() {
+  const plantedRoles = ['leftFoot', 'rightFoot', 'leftToe', 'rightToe'];
+  const states = new Map();
+  plantedRoles.forEach((role) => {
+    const handle = state.controlHandleByRole.get(role);
+    if (!handle?.userData?.targetBone) return;
+    states.set(role, {
+      position: handle.position.clone(),
+      worldQuaternion: handle.userData.targetBone.getWorldQuaternion(new THREE.Quaternion()),
+    });
   });
-  applyToeIkTargets();
+  return states;
+}
+
+function applyLegIkTargets(plantedEndStates = null) {
+  ['leftFoot', 'rightFoot'].forEach((role) => {
+    const footHandle = state.controlHandleByRole.get(role);
+    if (footHandle) solveHandleIk(footHandle, null, getPlantedIkOptions(plantedEndStates, role));
+  });
+  ['leftToe', 'rightToe'].forEach((role) => {
+    const toeHandle = state.controlHandleByRole.get(role);
+    if (toeHandle) solveHandleIk(toeHandle, null, getPlantedIkOptions(plantedEndStates, role));
+  });
+  ['leftFoot', 'rightFoot'].forEach((role) => {
+    const footHandle = state.controlHandleByRole.get(role);
+    if (footHandle) solveHandleIk(footHandle, null, getPlantedIkOptions(plantedEndStates, role));
+  });
+}
+
+function getPlantedIkOptions(plantedEndStates, role) {
+  const planted = plantedEndStates?.get(role);
+  if (!planted) return null;
+  return {
+    targetPosition: planted.position,
+    lockedEndWorldQuaternion: planted.worldQuaternion,
+  };
 }
 
 function applyToeIkTargets() {
   state.controlHandles.forEach((handle) => {
     if (handle.userData.controllerType !== 'ik' || handle.userData.limbType !== 'toe') return;
-    solveIk(handle.userData.targetBone, handle.userData.ikChain, handle.position.clone(), handle.userData.poleHandle?.position);
+    solveHandleIk(handle);
   });
+}
+
+function solveHandleIk(handle, overridePolePosition = null, overrideOptions = null) {
+  if (!handle?.userData?.targetBone || !handle.userData.ikChain) return;
+  solveIk(
+    handle.userData.targetBone,
+    handle.userData.ikChain,
+    overrideOptions?.targetPosition || handle.position.clone(),
+    overridePolePosition || handle.userData.poleHandle?.position,
+    { ...handle.userData.ikOptions, ...overrideOptions },
+  );
 }
 
 function syncControlsToBones() {
@@ -526,6 +787,11 @@ function syncControlsToBones() {
     state.pelvisBone.getWorldPosition(state.pelvisControlPivot.position);
   }
   state.controlHandles.forEach((handle) => {
+    if (handle.userData.controllerType === 'joint') {
+      handle.userData.targetBone?.getWorldPosition(position);
+      handle.position.copy(position);
+      return;
+    }
     if (handle.userData.controllerType !== 'ik') return;
     handle.userData.targetBone.getWorldPosition(position);
     handle.position.copy(position);
@@ -543,8 +809,13 @@ function resetPoleVectorPositions() {
   });
 }
 
-function solveIk(endBone, chain, targetPosition, polePosition = null) {
+function solveIk(endBone, chain, targetPosition, polePosition = null, options = {}) {
   if (!endBone || !chain?.length) return;
+  const config = { ...IK_DEFAULT_OPTIONS, ...options };
+  if (config.twoBone && chain.length >= 2) {
+    solveTwoBoneIk(endBone, chain, targetPosition, polePosition, config);
+    return;
+  }
   const endPosition = new THREE.Vector3();
   const jointPosition = new THREE.Vector3();
   const toEnd = new THREE.Vector3();
@@ -552,8 +823,12 @@ function solveIk(endBone, chain, targetPosition, polePosition = null) {
   const boneWorldQuaternion = new THREE.Quaternion();
   const parentWorldQuaternion = new THREE.Quaternion();
   const newWorldQuaternion = new THREE.Quaternion();
+  const lockedEndWorldQuaternion = new THREE.Quaternion();
+  if (config.lockEndRotation) {
+    lockedEndWorldQuaternion.copy(config.lockedEndWorldQuaternion || endBone.getWorldQuaternion(new THREE.Quaternion()));
+  }
 
-  for (let iteration = 0; iteration < 8; iteration += 1) {
+  for (let iteration = 0; iteration < config.iterations; iteration += 1) {
     for (const bone of chain) {
       bone.updateWorldMatrix(true, true);
       endBone.updateWorldMatrix(true, false);
@@ -569,7 +844,12 @@ function solveIk(endBone, chain, targetPosition, polePosition = null) {
       const dot = THREE.MathUtils.clamp(toEnd.dot(toTarget), -1, 1);
       if (dot > 0.9995) continue;
 
-      const deltaWorld = new THREE.Quaternion().setFromUnitVectors(toEnd, toTarget);
+      const angle = Math.min(Math.acos(dot) * config.damping, config.maxAngle);
+      if (angle < 0.00001) continue;
+      const axis = new THREE.Vector3().crossVectors(toEnd, toTarget);
+      if (axis.lengthSq() < 0.000001) continue;
+      axis.normalize();
+      const deltaWorld = new THREE.Quaternion().setFromAxisAngle(axis, angle);
       bone.getWorldQuaternion(boneWorldQuaternion);
       newWorldQuaternion.copy(deltaWorld).multiply(boneWorldQuaternion);
 
@@ -582,10 +862,109 @@ function solveIk(endBone, chain, targetPosition, polePosition = null) {
       bone.updateWorldMatrix(true, true);
     }
   }
-  if (polePosition) applyPoleVector(endBone, chain, targetPosition, polePosition);
+  if (polePosition) applyPoleVector(endBone, chain, targetPosition, polePosition, config.poleStrength);
+  if (config.lockEndRotation) setWorldQuaternion(endBone, lockedEndWorldQuaternion);
 }
 
-function applyPoleVector(endBone, chain, targetPosition, polePosition) {
+function solveTwoBoneIk(endBone, chain, targetPosition, polePosition, config) {
+  const lowerBone = chain[0];
+  const upperBone = chain[1];
+  const rootPosition = new THREE.Vector3();
+  const midPosition = new THREE.Vector3();
+  const endPosition = new THREE.Vector3();
+  const axis = new THREE.Vector3();
+  const poleDirection = new THREE.Vector3();
+  const desiredMidPosition = new THREE.Vector3();
+  const lockedEndWorldQuaternion = new THREE.Quaternion();
+
+  if (config.lockEndRotation) {
+    lockedEndWorldQuaternion.copy(config.lockedEndWorldQuaternion || endBone.getWorldQuaternion(new THREE.Quaternion()));
+  }
+
+  for (let iteration = 0; iteration < config.iterations; iteration += 1) {
+    upperBone.updateWorldMatrix(true, true);
+    lowerBone.updateWorldMatrix(true, true);
+    endBone.updateWorldMatrix(true, false);
+    upperBone.getWorldPosition(rootPosition);
+    lowerBone.getWorldPosition(midPosition);
+    endBone.getWorldPosition(endPosition);
+
+    const upperLength = Math.max(rootPosition.distanceTo(midPosition), 0.0001);
+    const lowerLength = Math.max(midPosition.distanceTo(endPosition), 0.0001);
+    const targetDistance = THREE.MathUtils.clamp(
+      rootPosition.distanceTo(targetPosition),
+      0.0001,
+      upperLength + lowerLength - 0.0001,
+    );
+
+    axis.copy(targetPosition).sub(rootPosition);
+    if (axis.lengthSq() < 0.000001) return;
+    axis.normalize();
+
+    if (polePosition) {
+      poleDirection.copy(polePosition).sub(rootPosition).projectOnPlane(axis);
+    } else {
+      poleDirection.copy(midPosition).sub(rootPosition).projectOnPlane(axis);
+    }
+    if (poleDirection.lengthSq() < 0.000001) {
+      poleDirection.set(0, 0, 1).projectOnPlane(axis);
+    }
+    if (poleDirection.lengthSq() < 0.000001) {
+      poleDirection.set(1, 0, 0).projectOnPlane(axis);
+    }
+    poleDirection.normalize();
+
+    const along = THREE.MathUtils.clamp(
+      (targetDistance * targetDistance + upperLength * upperLength - lowerLength * lowerLength) / (2 * targetDistance),
+      0,
+      upperLength,
+    );
+    const bendHeight = Math.sqrt(Math.max(upperLength * upperLength - along * along, 0));
+    desiredMidPosition.copy(rootPosition)
+      .addScaledVector(axis, along)
+      .addScaledVector(poleDirection, bendHeight);
+
+    rotateBoneTowardWorldPoint(upperBone, midPosition, desiredMidPosition, rootPosition, config);
+
+    lowerBone.updateWorldMatrix(true, true);
+    endBone.updateWorldMatrix(true, false);
+    lowerBone.getWorldPosition(midPosition);
+    endBone.getWorldPosition(endPosition);
+    rotateBoneTowardWorldPoint(lowerBone, endPosition, targetPosition, midPosition, config);
+  }
+
+  if (config.lockEndRotation) setWorldQuaternion(endBone, lockedEndWorldQuaternion);
+}
+
+function rotateBoneTowardWorldPoint(bone, currentPoint, desiredPoint, pivotPoint, config) {
+  const from = currentPoint.clone().sub(pivotPoint);
+  const to = desiredPoint.clone().sub(pivotPoint);
+  if (from.lengthSq() < 0.000001 || to.lengthSq() < 0.000001) return;
+  from.normalize();
+  to.normalize();
+  const dot = THREE.MathUtils.clamp(from.dot(to), -1, 1);
+  if (dot > 0.9999) return;
+  const axis = new THREE.Vector3().crossVectors(from, to);
+  if (axis.lengthSq() < 0.000001) return;
+  axis.normalize();
+  const angle = Math.min(Math.acos(dot) * config.damping, config.maxAngle);
+  const deltaWorld = new THREE.Quaternion().setFromAxisAngle(axis, angle);
+  const boneWorldQuaternion = bone.getWorldQuaternion(new THREE.Quaternion());
+  setWorldQuaternion(bone, deltaWorld.multiply(boneWorldQuaternion));
+}
+
+function setWorldQuaternion(node, worldQuaternion) {
+  const parentWorldQuaternion = new THREE.Quaternion();
+  if (node.parent) {
+    node.parent.getWorldQuaternion(parentWorldQuaternion).invert();
+    node.quaternion.copy(parentWorldQuaternion.multiply(worldQuaternion));
+  } else {
+    node.quaternion.copy(worldQuaternion);
+  }
+  node.updateWorldMatrix(true, true);
+}
+
+function applyPoleVector(endBone, chain, targetPosition, polePosition, strength = 0.85) {
   if (chain.length < 2) return;
   const upperBone = chain[1];
   const midBone = chain[0];
@@ -621,7 +1000,7 @@ function applyPoleVector(endBone, chain, targetPosition, polePosition) {
   const cross = new THREE.Vector3().crossVectors(currentPole, desiredPole);
   if (cross.dot(axis) < 0) angle *= -1;
 
-  const deltaWorld = new THREE.Quaternion().setFromAxisAngle(axis, angle * 0.85);
+  const deltaWorld = new THREE.Quaternion().setFromAxisAngle(axis, angle * strength);
   upperBone.getWorldQuaternion(upperWorldQuaternion);
   newWorldQuaternion.copy(deltaWorld).multiply(upperWorldQuaternion);
 
@@ -635,28 +1014,56 @@ function applyPoleVector(endBone, chain, targetPosition, polePosition) {
 }
 
 function setTransformMode(mode) {
-  state.requestedTransformMode = 'translate';
-  state.currentTransformMode = 'translate';
-  transform.setMode('translate');
-  transform.enabled = false;
-  transform.visible = false;
-  moveToolButton.classList.add('active');
-  rotateToolButton.classList.remove('active');
+  const nextMode = mode === 'position' ? 'position' : 'rotation';
+  state.requestedTransformMode = nextMode;
+  state.currentTransformMode = nextMode;
+  if (nextMode === 'position') {
+    initializePositionIkTargets();
+  } else {
+    state.positionIkTargets.clear();
+  }
+  transform.setMode('rotate');
+  transform.enabled = nextMode === 'rotation' && Boolean(state.selectedBone);
+  transform.visible = transform.enabled;
+  transformHelper.visible = transform.enabled;
+  updateModeButtons();
+  updateJointControllers();
+  updatePelvisController();
+}
+
+function initializePositionIkTargets() {
+  ['leftFoot', 'rightFoot'].forEach((role) => {
+    const handle = state.controlHandleByRole.get(role);
+    if (!handle) return;
+    if (!state.positionIkTargets.has(role)) {
+      state.positionIkTargets.set(role, handle.position.clone());
+    }
+  });
 }
 
 function effectiveTransformModeForSelection() {
-  return 'translate';
+  return state.requestedTransformMode;
 }
 
 function refreshTransformMode() {
   state.currentTransformMode = effectiveTransformModeForSelection();
-  transform.setMode('translate');
-  transform.enabled = false;
-  transform.visible = false;
-  moveToolButton.classList.add('active');
-  rotateToolButton.classList.remove('active');
-  moveToolButton.disabled = !state.selectedController;
-  rotateToolButton.disabled = true;
+  transform.setMode('rotate');
+  transform.enabled = state.currentTransformMode === 'rotation' && Boolean(state.selectedBone);
+  transform.visible = transform.enabled;
+  transformHelper.visible = transform.enabled;
+  updateModeButtons();
+  updateJointControllers();
+  updatePelvisController();
+}
+
+function updateModeButtons() {
+  const isPosition = state.currentTransformMode === 'position';
+  moveToolButton?.classList.toggle('active', isPosition);
+  rotateToolButton?.classList.toggle('active', !isPosition);
+  positionModeButton?.classList.toggle('active', isPosition);
+  rotationModeButton?.classList.toggle('active', !isPosition);
+  positionModeButton?.setAttribute('aria-pressed', String(isPosition));
+  rotationModeButton?.setAttribute('aria-pressed', String(!isPosition));
 }
 
 function getScreenDragPoint(event, plane) {
@@ -670,7 +1077,10 @@ function getScreenDragPoint(event, plane) {
 
 function startScreenDrag(event, controller) {
   selectController(controller);
-  if (state.currentTransformMode !== 'translate') return false;
+  if (state.currentTransformMode === 'position' && !canUsePositionIk(controller)) {
+    status.textContent = 'Position IK is only for hips and ankles';
+    return false;
+  }
 
   const normal = new THREE.Vector3();
   camera.getWorldDirection(normal);
@@ -684,6 +1094,8 @@ function startScreenDrag(event, controller) {
     startPoint,
     startPosition: controller.position.clone(),
     startPose: clonePose(),
+    lastClientX: event.clientX,
+    lastClientY: event.clientY,
     changed: false,
   };
   orbit.enabled = false;
@@ -694,18 +1106,198 @@ function startScreenDrag(event, controller) {
 
 function updateScreenDrag(event) {
   if (!state.screenDrag) return;
-  const point = getScreenDragPoint(event, state.screenDrag.plane);
-  if (!point) return;
-  const offset = point.sub(state.screenDrag.startPoint);
-  const previousPosition = state.screenDrag.controller.position.clone();
-  state.screenDrag.controller.position.copy(state.screenDrag.startPosition).add(offset);
-  const frameOffset = state.screenDrag.controller.position.clone().sub(previousPosition);
-  moveChildControls(state.screenDrag.controller.userData.role, frameOffset);
-  state.selectedController = state.screenDrag.controller;
-  state.selectedBone = state.screenDrag.controller.userData.targetBone;
-  applySelectedMoveController();
+  if (state.currentTransformMode === 'position') {
+    updatePositionIkDrag(event);
+    return;
+  }
+
+  const dx = event.clientX - state.screenDrag.lastClientX;
+  const dy = event.clientY - state.screenDrag.lastClientY;
+  state.screenDrag.lastClientX = event.clientX;
+  state.screenDrag.lastClientY = event.clientY;
+  applyScreenRotationDrag(state.screenDrag.controller, dx, dy);
   state.screenDrag.changed = true;
   status.textContent = 'Pose changed';
+}
+
+function canUsePositionIk(controller) {
+  return ['hips', 'leftFoot', 'rightFoot'].includes(controller?.userData?.semanticRole);
+}
+
+function updatePositionIkDrag(event) {
+  const point = getScreenDragPoint(event, state.screenDrag.plane);
+  if (!point) return;
+
+  const controller = state.screenDrag.controller;
+  const role = controller.userData.semanticRole;
+  const offset = point.sub(state.screenDrag.startPoint);
+  const targetPosition = state.screenDrag.startPosition.clone().add(offset);
+
+  if (role === 'hips') {
+    moveHipsWithAnchoredFeet(targetPosition);
+  } else if (role === 'leftFoot' || role === 'rightFoot') {
+    controller.position.copy(targetPosition);
+    state.positionIkTargets.set(role, targetPosition.clone());
+    solveLegToFootHandle(role);
+  }
+
+  state.screenDrag.changed = true;
+  status.textContent = 'Pose changed';
+}
+
+function moveHipsWithAnchoredFeet(targetPosition) {
+  if (!state.pelvisBone?.parent) return;
+  const footAnchors = captureFootIkAnchors();
+  const constrainedTarget = constrainHipsForFootAnchors(targetPosition, footAnchors);
+  const localPosition = constrainedTarget.clone();
+  state.pelvisBone.parent.worldToLocal(localPosition);
+  state.pelvisBone.position.copy(localPosition);
+  solveLegToFootHandle('leftFoot', footAnchors.leftFoot);
+  solveLegToFootHandle('rightFoot', footAnchors.rightFoot);
+}
+
+function captureFootIkAnchors() {
+  const anchors = {};
+  ['leftFoot', 'rightFoot'].forEach((role) => {
+    const handle = state.controlHandleByRole.get(role);
+    const bone = handle?.userData?.targetBone;
+    if (!handle || !bone) return;
+    const target = state.positionIkTargets.get(role) || handle.position;
+    anchors[role] = {
+      position: target.clone(),
+      worldQuaternion: bone.getWorldQuaternion(new THREE.Quaternion()),
+    };
+  });
+  return anchors;
+}
+
+function constrainHipsForFootAnchors(targetPosition, anchors) {
+  const currentHipsPosition = state.pelvisBone.getWorldPosition(new THREE.Vector3());
+  const constrained = targetPosition.clone();
+  ['leftFoot', 'rightFoot'].forEach((role) => {
+    const handle = state.controlHandleByRole.get(role);
+    const anchor = anchors[role];
+    const chain = getLegChainForFootRole(role);
+    if (!handle || !anchor || !chain) return;
+
+    const rootPosition = chain.upper.getWorldPosition(new THREE.Vector3());
+    const midPosition = chain.lower.getWorldPosition(new THREE.Vector3());
+    const endPosition = chain.end.getWorldPosition(new THREE.Vector3());
+    const maxReach = rootPosition.distanceTo(midPosition) + midPosition.distanceTo(endPosition) - 0.012;
+    const desiredRoot = rootPosition.clone().add(constrained.clone().sub(currentHipsPosition));
+    const distance = desiredRoot.distanceTo(anchor.position);
+    if (distance <= maxReach) return;
+
+    const direction = desiredRoot.clone().sub(anchor.position).normalize();
+    const clampedRoot = anchor.position.clone().add(direction.multiplyScalar(maxReach));
+    constrained.add(clampedRoot.sub(desiredRoot));
+  });
+  return constrained;
+}
+
+function applyScreenRotationDrag(controller, dx, dy) {
+  const targetBone = controller?.userData?.targetBone;
+  if (!targetBone) return;
+  const cameraRight = new THREE.Vector3().setFromMatrixColumn(camera.matrixWorld, 0).normalize();
+  const cameraUp = new THREE.Vector3().setFromMatrixColumn(camera.matrixWorld, 1).normalize();
+  const sensitivity = 0.01;
+  const yaw = new THREE.Quaternion().setFromAxisAngle(cameraUp, dx * sensitivity);
+  const pitch = new THREE.Quaternion().setFromAxisAngle(cameraRight, dy * sensitivity);
+  const boneWorldQuaternion = targetBone.getWorldQuaternion(new THREE.Quaternion());
+  setWorldQuaternion(targetBone, yaw.multiply(pitch).multiply(boneWorldQuaternion));
+  syncRotationUi();
+}
+
+function getLegChainForFootRole(role) {
+  const footHandle = state.controlHandleByRole.get(role);
+  const footBone = footHandle?.userData?.targetBone;
+  if (!footBone) return null;
+  const lowerPattern = role === 'leftFoot' ? /leftleg$/i : /rightleg$/i;
+  const upperPattern = role === 'leftFoot' ? /leftupleg$/i : /rightupleg$/i;
+  const lower = state.bones.find((bone) => lowerPattern.test(bone.name));
+  const upper = state.bones.find((bone) => upperPattern.test(bone.name));
+  if (!upper || !lower) return null;
+  return { upper, lower, end: footBone };
+}
+
+function solveLegToFootHandle(role, anchorOverride = null) {
+  const handle = state.controlHandleByRole.get(role);
+  const chain = getLegChainForFootRole(role);
+  if (!handle || !chain) return;
+
+  const targetPosition = anchorOverride?.position || handle.position.clone();
+  const lockedFootWorldQuaternion =
+    anchorOverride?.worldQuaternion || chain.end.getWorldQuaternion(new THREE.Quaternion());
+  const kneePoleOffset = role === 'leftFoot' ? new THREE.Vector3(0, 0, 0.5) : new THREE.Vector3(0, 0, 0.5);
+
+  solveStableTwoJointIk(chain.upper, chain.lower, chain.end, targetPosition, kneePoleOffset);
+  setWorldQuaternion(chain.end, lockedFootWorldQuaternion);
+  if (anchorOverride) {
+    handle.position.copy(anchorOverride.position);
+  } else {
+    chain.end.getWorldPosition(handle.position);
+  }
+}
+
+function solveStableTwoJointIk(upperBone, lowerBone, endBone, targetPosition, poleOffset) {
+  upperBone.updateWorldMatrix(true, true);
+  lowerBone.updateWorldMatrix(true, true);
+  endBone.updateWorldMatrix(true, false);
+
+  const rootPosition = upperBone.getWorldPosition(new THREE.Vector3());
+  const midPosition = lowerBone.getWorldPosition(new THREE.Vector3());
+  const endPosition = endBone.getWorldPosition(new THREE.Vector3());
+  const upperLength = Math.max(rootPosition.distanceTo(midPosition), 0.0001);
+  const lowerLength = Math.max(midPosition.distanceTo(endPosition), 0.0001);
+  const maxReach = upperLength + lowerLength - 0.0001;
+  const minReach = Math.abs(upperLength - lowerLength) + 0.0001;
+
+  const targetVector = targetPosition.clone().sub(rootPosition);
+  const rawDistance = targetVector.length();
+  if (rawDistance < 0.0001) return;
+  const distance = THREE.MathUtils.clamp(rawDistance, minReach, maxReach);
+  const axis = targetVector.normalize();
+
+  const polePosition = midPosition.clone().add(poleOffset);
+  const poleDirection = polePosition.sub(rootPosition).projectOnPlane(axis);
+  if (poleDirection.lengthSq() < 0.000001) poleDirection.set(0, 0, 1).projectOnPlane(axis);
+  if (poleDirection.lengthSq() < 0.000001) poleDirection.set(1, 0, 0).projectOnPlane(axis);
+  poleDirection.normalize();
+
+  const along = THREE.MathUtils.clamp(
+    (distance * distance + upperLength * upperLength - lowerLength * lowerLength) / (2 * distance),
+    0,
+    upperLength,
+  );
+  const bendHeight = Math.sqrt(Math.max(upperLength * upperLength - along * along, 0));
+  const desiredMidPosition = rootPosition.clone()
+    .addScaledVector(axis, along)
+    .addScaledVector(poleDirection, bendHeight);
+  const desiredEndPosition = rootPosition.clone().addScaledVector(axis, distance);
+
+  rotateBoneExactlyTowardWorldPoint(upperBone, midPosition, desiredMidPosition, rootPosition);
+
+  lowerBone.updateWorldMatrix(true, true);
+  endBone.updateWorldMatrix(true, false);
+  const newMidPosition = lowerBone.getWorldPosition(new THREE.Vector3());
+  const newEndPosition = endBone.getWorldPosition(new THREE.Vector3());
+  rotateBoneExactlyTowardWorldPoint(lowerBone, newEndPosition, desiredEndPosition, newMidPosition);
+}
+
+function rotateBoneExactlyTowardWorldPoint(bone, currentPoint, desiredPoint, pivotPoint) {
+  const from = currentPoint.clone().sub(pivotPoint);
+  const to = desiredPoint.clone().sub(pivotPoint);
+  if (from.lengthSq() < 0.000001 || to.lengthSq() < 0.000001) return;
+  from.normalize();
+  to.normalize();
+  const dot = THREE.MathUtils.clamp(from.dot(to), -1, 1);
+  if (dot > 0.999999) return;
+  const axis = new THREE.Vector3().crossVectors(from, to);
+  if (axis.lengthSq() < 0.000001) return;
+  axis.normalize();
+  const deltaWorld = new THREE.Quaternion().setFromAxisAngle(axis, Math.acos(dot));
+  const boneWorldQuaternion = bone.getWorldQuaternion(new THREE.Quaternion());
+  setWorldQuaternion(bone, deltaWorld.multiply(boneWorldQuaternion));
 }
 
 function finishScreenDrag(event) {
@@ -713,11 +1305,7 @@ function finishScreenDrag(event) {
   if (state.screenDrag.changed && !posesEqual(state.screenDrag.startPose, clonePose())) {
     pushUndo(state.screenDrag.startPose);
   }
-  if (state.screenDrag.controller.userData.controllerType === 'ik') {
-    state.screenDrag.controller.userData.targetBone.getWorldPosition(state.screenDrag.controller.position);
-  }
-  updatePelvisController();
-  updateLimbControllers();
+  updateJointControllers();
   renderer.domElement.releasePointerCapture?.(event.pointerId);
   state.screenDrag = null;
   orbit.enabled = true;
@@ -744,7 +1332,7 @@ function selectBone(bone) {
   state.selectedController = null;
   state.selectedBone = bone;
   jointSelect.value = bone.uuid;
-  transform.detach();
+  transform.attach(bone);
   refreshTransformMode();
   state.jointHighlight.visible = true;
   state.selectedBoneLinks.visible = state.showSkeleton;
@@ -761,7 +1349,11 @@ function selectController(controller) {
   state.selectedBone = targetBone || null;
   jointSelect.value = targetBone?.uuid || '';
   controller.quaternion.identity();
-  transform.detach();
+  if (targetBone) {
+    transform.attach(targetBone);
+  } else {
+    transform.detach();
+  }
   refreshTransformMode();
   if (state.jointHighlight) state.jointHighlight.visible = false;
   state.selectedBoneLinks.visible = state.showSkeleton && Boolean(targetBone);
@@ -775,6 +1367,9 @@ function deselectBone() {
   state.selectedBone = null;
   jointSelect.value = '';
   transform.detach();
+  transform.enabled = false;
+  transform.visible = false;
+  transformHelper.visible = false;
   if (state.jointHighlight) state.jointHighlight.visible = false;
   if (state.selectedBoneLinks) {
     state.selectedBoneLinks.visible = false;
@@ -953,6 +1548,84 @@ function setMeshVisible(visible) {
   });
 }
 
+function isDescendantOf(node, ancestor) {
+  let current = node;
+  while (current) {
+    if (current === ancestor) return true;
+    current = current.parent;
+  }
+  return false;
+}
+
+function isVisibleForRaycast(node) {
+  let current = node;
+  while (current) {
+    if (!current.visible) return false;
+    current = current.parent;
+  }
+  return true;
+}
+
+function getPaintableMeshes() {
+  const meshes = [];
+  [state.model, state.baseplate].forEach((root) => {
+    if (!root || !isVisibleForRaycast(root)) return;
+    root.traverse((node) => {
+      if (node.isMesh && node.material && isVisibleForRaycast(node)) meshes.push(node);
+    });
+  });
+  return meshes;
+}
+
+function clonePaintedMaterial(material, color) {
+  const painted = material.clone();
+  if (painted.color) painted.color.set(color);
+  painted.needsUpdate = true;
+  return painted;
+}
+
+function paintMesh(mesh, color) {
+  if (Array.isArray(mesh.material)) {
+    mesh.material = mesh.material.map((material) => clonePaintedMaterial(material, color));
+  } else {
+    mesh.material = clonePaintedMaterial(mesh.material, color);
+  }
+}
+
+function paintObjectRoot(root, color) {
+  root.traverse((node) => {
+    if (node.isMesh && node.material) paintMesh(node, color);
+  });
+}
+
+function selectPaintColor(button) {
+  state.selectedPaintColor = button.dataset.paintColor;
+  state.selectedPaintLabel = button.dataset.paintLabel || 'Color';
+  colorSwatches.forEach((swatch) => swatch.classList.toggle('active', swatch === button));
+  status.textContent = `${state.selectedPaintLabel} selected`;
+}
+
+function setColorPaletteVisible(visible) {
+  state.showColorPalette = visible;
+  colorPalette?.classList.toggle('hidden', !visible);
+  paintToggle?.classList.toggle('active', visible);
+  paintToggle?.setAttribute('aria-pressed', String(visible));
+}
+
+function paintObjectAtPointer() {
+  const hits = raycaster.intersectObjects(getPaintableMeshes(), true);
+  if (!hits.length) return false;
+
+  const hitMesh = hits[0].object;
+  const targetRoot = state.model && isDescendantOf(hitMesh, state.model) ? state.model : state.baseplate;
+  if (!targetRoot) return false;
+
+  paintObjectRoot(targetRoot, state.selectedPaintColor);
+  const targetLabel = targetRoot === state.model ? 'character' : 'baseplate';
+  status.textContent = `${state.selectedPaintLabel} applied to ${targetLabel}`;
+  return true;
+}
+
 function toggleButton(button, active) {
   button.classList.toggle('active', active);
   button.setAttribute('aria-pressed', String(active));
@@ -976,8 +1649,24 @@ document.querySelector('#gridToggle').addEventListener('click', (event) => {
   toggleButton(event.currentTarget, state.showGrid);
 });
 
-moveToolButton.addEventListener('click', () => setTransformMode('translate'));
-rotateToolButton.addEventListener('click', () => setTransformMode('translate'));
+baseplateToggle?.addEventListener('click', (event) => {
+  state.showBaseplate = !state.showBaseplate;
+  if (state.baseplate) state.baseplate.visible = state.showBaseplate;
+  toggleButton(event.currentTarget, state.showBaseplate);
+});
+
+paintToggle?.addEventListener('click', () => {
+  setColorPaletteVisible(!state.showColorPalette);
+});
+
+colorSwatches.forEach((button) => {
+  button.addEventListener('click', () => selectPaintColor(button));
+});
+
+moveToolButton.addEventListener('click', () => setTransformMode('position'));
+rotateToolButton.addEventListener('click', () => setTransformMode('rotation'));
+positionModeButton?.addEventListener('click', () => setTransformMode('position'));
+rotationModeButton?.addEventListener('click', () => setTransformMode('rotation'));
 
 jointSelect.addEventListener('change', () => {
   if (!jointSelect.value) {
@@ -1048,7 +1737,10 @@ window.addEventListener('keydown', (event) => {
 
   if (event.target instanceof HTMLInputElement || event.target instanceof HTMLSelectElement) return;
   if (event.key.toLowerCase() === 'w') {
-    setTransformMode('translate');
+    setTransformMode('position');
+  }
+  if (event.key.toLowerCase() === 'e') {
+    setTransformMode('rotation');
   }
 });
 
@@ -1071,7 +1763,8 @@ renderer.domElement.addEventListener('pointerdown', (event) => {
   pointer.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
   raycaster.setFromCamera(pointer, camera);
 
-  const controllerHits = raycaster.intersectObjects(state.controlHandles.filter((handle) => handle.visible), true);
+  const hittableHandles = state.controlHandles.filter((handle) => handle.visible && isHandleEnabledForCurrentMode(handle));
+  const controllerHits = raycaster.intersectObjects(hittableHandles, true);
   if (controllerHits.length > 0) {
     const handle = controllerHits[0].object.userData.controlHandleParent || controllerHits[0].object;
     if (handle.userData.controllerType === 'pelvis') {
@@ -1081,6 +1774,8 @@ renderer.domElement.addEventListener('pointerdown', (event) => {
     if (startScreenDrag(event, handle)) return;
     return;
   }
+
+  if (paintObjectAtPointer()) return;
 
   deselectBone();
 });

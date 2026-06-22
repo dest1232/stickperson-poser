@@ -4,7 +4,8 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Stickperson Poser</title>
-    <link rel="stylesheet" href="/src/styles.css?v=icon-buttons" />
+    <link rel="icon" href="data:," />
+    <link rel="stylesheet" href="/src/styles.css?v=paint-panel-toggle" />
     <script type="importmap">
       {
         "imports": {
@@ -28,6 +29,26 @@
       </symbol>
       <symbol id="icon-grid" viewBox="0 0 24 24">
         <path d="M4 4h16v16H4zM4 9.3h16M4 14.7h16M9.3 4v16M14.7 4v16" />
+      </symbol>
+      <symbol id="icon-baseplate" viewBox="0 0 24 24">
+        <path d="M4 16 12 20l8-4" />
+        <path d="M4 12 12 16l8-4" />
+        <path d="M4 8 12 4l8 4-8 4z" />
+      </symbol>
+      <symbol id="icon-paint" viewBox="0 0 24 24">
+        <path d="M19 11.5c0 4.1-3.4 7.5-7.7 7.5H9.4c-.9 0-1.4-1.1-.8-1.8.5-.6.2-1.5-.6-1.5H6.8C4.7 15.7 3 14 3 11.8 3 7.5 6.9 4 11.7 4 15.8 4 19 7.3 19 11.5z" />
+        <circle cx="8" cy="10" r="1" />
+        <circle cx="11" cy="7.8" r="1" />
+        <circle cx="14.5" cy="9" r="1" />
+        <circle cx="15" cy="12.5" r="1" />
+      </symbol>
+      <symbol id="icon-position" viewBox="0 0 24 24">
+        <path d="M12 3v18M3 12h18" />
+        <path d="M12 3 9 6M12 3l3 3M12 21l-3-3M12 21l3-3M3 12l3-3M3 12l3 3M21 12l-3-3M21 12l-3 3" />
+      </symbol>
+      <symbol id="icon-rotate-mode" viewBox="0 0 24 24">
+        <path d="M20 12a8 8 0 1 1-2.3-5.7" />
+        <path d="M20 4v6h-6" />
       </symbol>
       <symbol id="icon-new" viewBox="0 0 24 24">
         <path d="M12 5v14M5 12h14" />
@@ -78,6 +99,26 @@
               <button id="meshToggle" type="button" class="toggle active iconButton" aria-pressed="true" aria-label="Mesh" title="Mesh"><svg><use href="#icon-mesh"></use></svg></button>
               <button id="skeletonToggle" type="button" class="toggle iconButton" aria-pressed="false" aria-label="Skeleton" title="Skeleton"><svg><use href="#icon-skeleton"></use></svg></button>
               <button id="gridToggle" type="button" class="toggle active iconButton" aria-pressed="true" aria-label="Grid" title="Grid"><svg><use href="#icon-grid"></use></svg></button>
+              <button id="baseplateToggle" type="button" class="toggle active iconButton" aria-pressed="true" aria-label="Baseplate" title="Baseplate"><svg><use href="#icon-baseplate"></use></svg></button>
+              <button id="paintToggle" type="button" class="toggle iconButton" aria-pressed="false" aria-label="Paint colors" title="Paint colors"><svg><use href="#icon-paint"></use></svg></button>
+            </div>
+
+            <div class="overlayGroup modeActions" aria-label="Control mode">
+              <button id="positionMode" type="button" class="toggle iconButton" aria-pressed="false" aria-label="Position mode" title="Position mode"><svg><use href="#icon-position"></use></svg></button>
+              <button id="rotationMode" type="button" class="toggle active iconButton" aria-pressed="true" aria-label="Rotation mode" title="Rotation mode"><svg><use href="#icon-rotate-mode"></use></svg></button>
+            </div>
+
+            <div id="colorPalette" class="overlayGroup colorPalette hidden" aria-label="Material color">
+              <button type="button" class="colorSwatch active" data-paint-color="#f0f3f8" data-paint-label="White" aria-label="White" title="White" style="--swatch: #f0f3f8"></button>
+              <button type="button" class="colorSwatch" data-paint-color="#111111" data-paint-label="Black" aria-label="Black" title="Black" style="--swatch: #111111"></button>
+              <button type="button" class="colorSwatch" data-paint-color="#808080" data-paint-label="Gray" aria-label="Gray" title="Gray" style="--swatch: #808080"></button>
+              <button type="button" class="colorSwatch" data-paint-color="#ffd84d" data-paint-label="Yellow" aria-label="Yellow" title="Yellow" style="--swatch: #ffd84d"></button>
+              <button type="button" class="colorSwatch" data-paint-color="#2f9e62" data-paint-label="Green" aria-label="Green" title="Green" style="--swatch: #2f9e62"></button>
+              <button type="button" class="colorSwatch" data-paint-color="#2f80ed" data-paint-label="Blue" aria-label="Blue" title="Blue" style="--swatch: #2f80ed"></button>
+              <button type="button" class="colorSwatch" data-paint-color="#8e44ad" data-paint-label="Purple" aria-label="Purple" title="Purple" style="--swatch: #8e44ad"></button>
+              <button type="button" class="colorSwatch" data-paint-color="#e63946" data-paint-label="Red" aria-label="Red" title="Red" style="--swatch: #e63946"></button>
+              <button type="button" class="colorSwatch" data-paint-color="#ff6fb1" data-paint-label="Pink" aria-label="Pink" title="Pink" style="--swatch: #ff6fb1"></button>
+              <button type="button" class="colorSwatch" data-paint-color="#d4741f" data-paint-label="Orange" aria-label="Orange" title="Orange" style="--swatch: #d4741f"></button>
             </div>
 
             <div class="overlayGroup buttonRow poseActions" aria-label="Pose actions">
@@ -121,6 +162,6 @@
         </div>
       </aside>
     </main>
-    <script type="module" src="/src/main.js?v=hide-pole-vectors"></script>
+    <script type="module" src="/src/main.js?v=paint-panel-toggle"></script>
   </body>
 </html>

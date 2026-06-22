@@ -91,6 +91,49 @@ input {
   grid-auto-flow: initial;
 }
 
+.overlayGroup.modeActions {
+  grid-template-columns: repeat(2, minmax(42px, max-content));
+  grid-auto-flow: initial;
+}
+
+.overlayGroup.colorPalette {
+  grid-template-columns: repeat(5, 24px);
+  grid-auto-flow: initial;
+  grid-auto-columns: initial;
+  gap: 6px;
+  align-items: center;
+}
+
+.overlayGroup.colorPalette.hidden {
+  display: none;
+}
+
+.colorSwatch {
+  position: relative;
+  width: 24px;
+  min-width: 24px;
+  height: 24px;
+  min-height: 24px;
+  padding: 0;
+  border-radius: 999px;
+  background: var(--swatch);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.42), 0 1px 5px rgba(7, 18, 32, 0.18);
+}
+
+.colorSwatch:hover {
+  background: var(--swatch);
+  transform: translateY(-1px);
+}
+
+.colorSwatch.active {
+  border-color: rgba(255, 216, 116, 0.95);
+  background: var(--swatch);
+  box-shadow:
+    0 0 0 2px rgba(255, 200, 87, 0.95),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.42),
+    0 1px 6px rgba(7, 18, 32, 0.24);
+}
+
 .viewer canvas {
   display: block;
   width: 100%;
@@ -266,6 +309,25 @@ button:disabled {
   background: rgba(255, 200, 87, 0.9);
 }
 
+.viewportOverlay .colorSwatch,
+.viewportOverlay .colorSwatch:hover,
+.viewportOverlay .colorSwatch.active {
+  min-width: 24px;
+  width: 24px;
+  min-height: 24px;
+  height: 24px;
+  padding: 0;
+  background: var(--swatch);
+}
+
+.viewportOverlay .colorSwatch.active {
+  border-color: rgba(255, 216, 116, 0.95);
+  box-shadow:
+    0 0 0 2px rgba(255, 200, 87, 0.95),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.42),
+    0 1px 6px rgba(7, 18, 32, 0.24);
+}
+
 button.active,
 .toggle.active {
   color: #11100e;
@@ -373,11 +435,38 @@ input[type='range'] {
     width: min(100%, 310px);
   }
 
+  .overlayGroup.modeActions {
+    grid-template-columns: repeat(2, minmax(38px, 1fr));
+  }
+
+  .overlayGroup.colorPalette {
+    grid-template-columns: repeat(10, 22px);
+    width: auto;
+  }
+
+  .colorSwatch {
+    width: 22px;
+    min-width: 22px;
+    height: 22px;
+    min-height: 22px;
+  }
+
   .viewportOverlay .toggle,
   .viewportOverlay button {
     min-height: 32px;
     padding: 0 8px;
     font-size: 0.76rem;
+  }
+
+  .viewportOverlay .colorSwatch,
+  .viewportOverlay .colorSwatch:hover,
+  .viewportOverlay .colorSwatch.active {
+    width: 22px;
+    min-width: 22px;
+    height: 22px;
+    min-height: 22px;
+    padding: 0;
+    background: var(--swatch);
   }
 }
 
@@ -388,8 +477,18 @@ input[type='range'] {
   }
 
   .overlayGroup,
+  .overlayGroup.modeActions,
   .overlayGroup.poseActions {
     width: 100%;
+  }
+
+  .overlayGroup.colorPalette {
+    grid-template-columns: repeat(10, 1fr);
+    width: 100%;
+  }
+
+  .colorSwatch {
+    justify-self: center;
   }
 }
 
