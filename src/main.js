@@ -3,7 +3,7 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { TransformControls } from 'three/addons/controls/TransformControls.js';
 
-const MODEL_URL = '/public/stickman_default.glb';
+const MODEL_URL = '/public/stickman_parts.glb';
 const BASEPLATE_URL = '/public/default_baseplate.glb';
 const STORAGE_KEY = 'stickperson-poser.savedPose.v1';
 const RAD_TO_DEG = 180 / Math.PI;
@@ -16,6 +16,81 @@ const CONTROL_RING_SELECTED_COLOR = 0xffc857;
 const CONTROL_RING_SELECTED_FILL_COLOR = 0xffeebc;
 const CONTROL_RING_DISABLED_COLOR = 0x7c746a;
 const CONTROL_RING_DISABLED_FILL_COLOR = 0xd8d0c6;
+const DEFAULT_PART_COLORS = {
+  Parts_001: 0xe63946,
+  Parts_002: 0xf0f3f8,
+  Parts_003: 0x111111,
+  Parts_004: 0x111111,
+  Parts_005: 0xe63946,
+  Parts_006: 0xe63946,
+  Parts_007: 0x808080,
+  Parts_008: 0xe63946,
+  Parts_009: 0xe63946,
+  Parts_010: 0x808080,
+  Parts_011: 0x808080,
+  Parts_012: 0xd4741f,
+};
+const DEFAULT_BASEPLATE_COLOR = 0x2f9e62;
+const DEFAULT_POSE = {
+  mixamorigHips: {
+    rotation: [-1.5707962925663537, 0, 0],
+    position: [-0.012818546290506813, -0.0009410733582664726, -0.9194638665465535],
+  },
+  mixamorigLeftShoulder: {
+    rotation: [1.5652117443769993, -0.4441839015145959, -1.5840255307105413],
+  },
+  mixamorigLeftArm: {
+    rotation: [0.8276702849326172, 0.13252735802316135, -0.22958575381574203],
+  },
+  mixamorigLeftForeArm: {
+    rotation: [-0.07679694761126665, -0.0034058786303356376, 0.5005735622667496],
+  },
+  mixamorigLeftHand: {
+    rotation: [-0.046373609490984034, 0.0026929077082030544, -0.05796850554252944],
+  },
+  mixamorigLeftHandIndex1: {
+    rotation: [0.024811901692421687, -0.0035974945049966015, -0.14396006878591644],
+  },
+  mixamorigRightShoulder: {
+    rotation: [1.563263836298792, 0.44403422211981336, 1.5886049703421425],
+  },
+  mixamorigRightArm: {
+    rotation: [0.8238887747598844, -0.11198524550109362, 0.2720072748250259],
+  },
+  mixamorigRightForeArm: {
+    rotation: [-0.0767015563661833, 0.0033822698336967443, -0.49913126473271463],
+  },
+  mixamorigRightHand: {
+    rotation: [0.002675849516278053, -0.00003907629539673592, -0.01463639221551877],
+  },
+  mixamorigRightHandIndex1: {
+    rotation: [2.1893415818305155, -1.0117803182932998, 2.2691672338832407],
+  },
+  mixamorigLeftUpLeg: {
+    rotation: [-0.1298663524020236, -0.0030417550993555075, -3.0381528037643233],
+  },
+  mixamorigLeftLeg: {
+    rotation: [-0.3803443933248065, 0.011566502147186573, 0.0036502377830995936],
+  },
+  mixamorigLeftFoot: {
+    rotation: [1.183221882748981, -0.08587731378154509, -0.0394078704664922],
+  },
+  mixamorigLeftToeBase: {
+    rotation: [0.5973427717087232, 0.031095009954501, -0.02114559986063893],
+  },
+  mixamorigRightUpLeg: {
+    rotation: [-0.24387694373828286, 0.01576889727260951, 3.047091601001579],
+  },
+  mixamorigRightLeg: {
+    rotation: [-0.5787121523497185, -0.010018041272186048, -0.0025504115023009155],
+  },
+  mixamorigRightFoot: {
+    rotation: [1.2709664931161702, 0.07921485125804159, 0.033030014531785674],
+  },
+  mixamorigRightToeBase: {
+    rotation: [0.5934957153865638, -0.03111626654346832, 0.020985539062822526],
+  },
+};
 const IK_DEFAULT_OPTIONS = {
   iterations: 10,
   damping: 0.55,
@@ -23,10 +98,12 @@ const IK_DEFAULT_OPTIONS = {
   poleStrength: 0.7,
   lockEndRotation: false,
 };
-const stickmanMaterial = new THREE.MeshStandardMaterial({
+const stickmanMaterial = new THREE.MeshPhysicalMaterial({
   color: 0xf0f3f8,
-  roughness: 0.74,
-  metalness: 0.02,
+  roughness: 0.62,
+  metalness: 0,
+  specularIntensity: 0.3,
+  specularColor: 0xfff4e6,
 });
 
 const viewer = document.querySelector('#viewer');
@@ -114,9 +191,9 @@ renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 viewer.appendChild(renderer.domElement);
 
-scene.add(new THREE.HemisphereLight(0xd7efff, 0x6f86aa, 1.35));
+scene.add(new THREE.HemisphereLight(0xe5f4ff, 0x7188aa, 1.6));
 
-const keyLight = new THREE.DirectionalLight(0xfffbf2, 1.55);
+const keyLight = new THREE.DirectionalLight(0xfffbf2, 1.8);
 keyLight.position.set(-3, 5, 4);
 keyLight.castShadow = true;
 keyLight.shadow.mapSize.set(1024, 1024);
@@ -128,7 +205,11 @@ keyLight.shadow.camera.top = 4;
 keyLight.shadow.camera.bottom = -4;
 scene.add(keyLight);
 
-const rimLight = new THREE.DirectionalLight(0x9fc8f5, 0.58);
+const fillLight = new THREE.DirectionalLight(0xc7ddf7, 0.48);
+fillLight.position.set(3, 3, 4);
+scene.add(fillLight);
+
+const rimLight = new THREE.DirectionalLight(0x9fc8f5, 0.7);
 rimLight.position.set(3, 2.5, -3);
 scene.add(rimLight);
 
@@ -188,6 +269,9 @@ transform.addEventListener('dragging-changed', (event) => {
 });
 transform.addEventListener('objectChange', () => {
   state.transformChanged = true;
+  if (state.currentTransformMode === 'position') {
+    applyTransformControllerTranslation();
+  }
   updateJointControllers();
   updateJointHighlight();
   updateSelectedBoneLinks();
@@ -217,7 +301,8 @@ new GLTFLoader().load(
     state.model = gltf.scene;
     state.model.traverse((node) => {
       if (node.isMesh) {
-        node.material = stickmanMaterial;
+        node.material = stickmanMaterial.clone();
+        node.material.color.setHex(DEFAULT_PART_COLORS[node.name] ?? 0xf0f3f8);
         node.castShadow = true;
         node.receiveShadow = true;
         node.frustumCulled = false;
@@ -234,6 +319,7 @@ new GLTFLoader().load(
     scene.add(state.model);
 
     state.bones = collectBones(state.model);
+    applyDefaultPose(state.bones);
     state.pelvisBone = findPelvisBone(state.bones);
     state.basePose = new Map(
       state.bones.map((bone) => [
@@ -265,7 +351,7 @@ new GLTFLoader().load(
   undefined,
   (error) => {
     console.error(error);
-    status.textContent = 'Could not load stickman_default.glb';
+    status.textContent = 'Could not load stickman_parts.glb';
     loading.textContent = 'Load failed';
   },
 );
@@ -282,6 +368,7 @@ new GLTFLoader().load(
         node.frustumCulled = false;
         if (node.material) {
           node.material = node.material.clone();
+          if (node.material.color) node.material.color.setHex(DEFAULT_BASEPLATE_COLOR);
           node.material.roughness = Math.max(node.material.roughness ?? 0.6, 0.72);
         }
       }
@@ -365,6 +452,16 @@ function collectBones(root) {
     if (node.isBone) bones.push(node);
   });
   return bones;
+}
+
+function applyDefaultPose(bones) {
+  bones.forEach((bone) => {
+    const pose = DEFAULT_POSE[bone.name];
+    if (!pose) return;
+    if (pose.rotation) bone.rotation.fromArray(pose.rotation);
+    if (pose.position) bone.position.fromArray(pose.position);
+  });
+  state.model?.updateMatrixWorld(true);
 }
 
 function findPelvisBone(bones) {
@@ -1022,10 +1119,7 @@ function setTransformMode(mode) {
   } else {
     state.positionIkTargets.clear();
   }
-  transform.setMode('rotate');
-  transform.enabled = nextMode === 'rotation' && Boolean(state.selectedBone);
-  transform.visible = transform.enabled;
-  transformHelper.visible = transform.enabled;
+  configureTransformControls();
   updateModeButtons();
   updateJointControllers();
   updatePelvisController();
@@ -1047,13 +1141,46 @@ function effectiveTransformModeForSelection() {
 
 function refreshTransformMode() {
   state.currentTransformMode = effectiveTransformModeForSelection();
-  transform.setMode('rotate');
-  transform.enabled = state.currentTransformMode === 'rotation' && Boolean(state.selectedBone);
-  transform.visible = transform.enabled;
-  transformHelper.visible = transform.enabled;
+  configureTransformControls();
   updateModeButtons();
   updateJointControllers();
   updatePelvisController();
+}
+
+function configureTransformControls() {
+  const isPosition = state.currentTransformMode === 'position';
+  const positionTarget = isPosition && canUsePositionIk(state.selectedController)
+    ? state.selectedController
+    : null;
+  const rotationTarget = !isPosition ? state.selectedBone : null;
+  const target = positionTarget || rotationTarget;
+
+  transform.setMode(isPosition ? 'translate' : 'rotate');
+  transform.setSpace(isPosition ? 'world' : 'local');
+  if (target) {
+    transform.attach(target);
+  } else {
+    transform.detach();
+  }
+  transform.enabled = Boolean(target);
+  transform.visible = transform.enabled;
+  transformHelper.visible = transform.enabled;
+}
+
+function applyTransformControllerTranslation() {
+  const controller = state.selectedController;
+  if (!canUsePositionIk(controller)) return;
+
+  const role = controller.userData.semanticRole;
+  const targetPosition = controller.position.clone();
+  if (role === 'hips') {
+    moveHipsWithAnchoredFeet(targetPosition);
+    return;
+  }
+  if (role === 'leftFoot' || role === 'rightFoot') {
+    state.positionIkTargets.set(role, targetPosition);
+    solveLegToFootHandle(role);
+  }
 }
 
 function updateModeButtons() {
@@ -1571,7 +1698,13 @@ function getPaintableMeshes() {
   [state.model, state.baseplate].forEach((root) => {
     if (!root || !isVisibleForRaycast(root)) return;
     root.traverse((node) => {
-      if (node.isMesh && node.material && isVisibleForRaycast(node)) meshes.push(node);
+      if (node.isMesh && node.material && isVisibleForRaycast(node)) {
+        if (node.isSkinnedMesh) {
+          node.computeBoundingBox();
+          node.computeBoundingSphere();
+        }
+        meshes.push(node);
+      }
     });
   });
   return meshes;
@@ -1613,15 +1746,23 @@ function setColorPaletteVisible(visible) {
 }
 
 function paintObjectAtPointer() {
+  if (!state.showColorPalette) return false;
+
   const hits = raycaster.intersectObjects(getPaintableMeshes(), true);
   if (!hits.length) return false;
 
   const hitMesh = hits[0].object;
-  const targetRoot = state.model && isDescendantOf(hitMesh, state.model) ? state.model : state.baseplate;
-  if (!targetRoot) return false;
+  const isCharacterPart = state.model && isDescendantOf(hitMesh, state.model);
 
-  paintObjectRoot(targetRoot, state.selectedPaintColor);
-  const targetLabel = targetRoot === state.model ? 'character' : 'baseplate';
+  if (isCharacterPart) {
+    paintMesh(hitMesh, state.selectedPaintColor);
+  } else if (state.baseplate && isDescendantOf(hitMesh, state.baseplate)) {
+    paintObjectRoot(state.baseplate, state.selectedPaintColor);
+  } else {
+    return false;
+  }
+
+  const targetLabel = isCharacterPart ? (hitMesh.name || 'character part') : 'baseplate';
   status.textContent = `${state.selectedPaintLabel} applied to ${targetLabel}`;
   return true;
 }
@@ -1763,6 +1904,8 @@ renderer.domElement.addEventListener('pointerdown', (event) => {
   pointer.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
   raycaster.setFromCamera(pointer, camera);
 
+  if (paintObjectAtPointer()) return;
+
   const hittableHandles = state.controlHandles.filter((handle) => handle.visible && isHandleEnabledForCurrentMode(handle));
   const controllerHits = raycaster.intersectObjects(hittableHandles, true);
   if (controllerHits.length > 0) {
@@ -1774,8 +1917,6 @@ renderer.domElement.addEventListener('pointerdown', (event) => {
     if (startScreenDrag(event, handle)) return;
     return;
   }
-
-  if (paintObjectAtPointer()) return;
 
   deselectBone();
 });
