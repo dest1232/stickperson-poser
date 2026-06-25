@@ -1,94 +1,58 @@
 # Web-to-iOS Sync Workflow
 
-This repo has two deliverables:
+The browser and iPhone/iPad apps now run the same Three.js source, CSS, and GLB
+assets. The active iOS project is a Capacitor container in `ios/App/`.
 
-- `index.html`, `src/`, `public/`: the Windows-friendly web prototype.
-- `ios/StickpersonPoser/`: the native SwiftUI + SceneKit iPhone/iPad app.
+## Windows Iteration
 
-The web app remains the fastest place to iterate on rig behavior and visual intent. The iOS app mirrors those decisions in native Swift. Treat the sections below as the handoff checklist whenever the web app changes.
+```powershell
+git pull
+npm install
+npm run dev
+```
 
-## Source of Truth
+After testing:
 
-- Character asset source: `public/stickman_default.glb`.
-- iOS source copy: `ios/StickpersonPoser/StickpersonPoser/Resources/stickman_default.glb`.
-- iOS runtime asset: `ios/StickpersonPoser/StickpersonPoser/Resources/stickman_default.usdz`.
-- Rig behavior source of truth for product intent: current web app behavior in `src/main.js`.
-- Native implementation mirror: `PoseSceneController.swift`, `IKSolver.swift`, `RigTypes.swift`.
+```powershell
+git add .
+git commit -m "Update stickperson poser"
+git push
+```
 
-## Windows Iteration Loop
+No USDZ conversion or separate Swift posing implementation is required.
 
-1. Update/test the web app on Windows:
+## Mac iOS Sync
 
-   ```powershell
-   npm run dev
-   ```
+```sh
+git pull
+npm install
+npm run ios:sync
+npm run ios:open
+```
 
-2. If the GLB changes, sync it into the iOS project:
+On this Mac, when using the project-local Node installation:
 
-   ```powershell
-   .\scripts\sync-ios-assets.ps1
-   ```
+```sh
+./scripts/use-project-node.sh npm install
+./scripts/use-project-node.sh npm run ios:sync
+./scripts/use-project-node.sh npm run ios:open
+```
 
-3. If rig behavior changes in `src/main.js`, update the native mirror:
+In Xcode:
 
-   - handle roles and parenting: `RigTypes.swift` and `PoseSceneController.createHandles()`
-   - IK solve behavior: `IKSolver.swift`
-   - scene visuals or controls: `PoseSceneController.swift` and `ContentView.swift`
+1. Select the `App` scheme.
+2. Select the development team.
+3. Choose an iPhone or iPad.
+4. Run the app.
 
-4. Commit and push to GitHub:
+## Verification Checklist
 
-   ```powershell
-   git add .
-   git commit -m "Update stickperson poser"
-   git push
-   ```
+- Run `npm run build`.
+- Confirm the model and baseplate load with Wi-Fi disabled.
+- Test iPhone portrait and landscape.
+- Test iPad portrait and landscape.
+- Test posing, IK, painting, camera controls, undo, save, and load.
+- Confirm app background/foreground behavior before release.
 
-## MacBook Build / Publish Loop
-
-1. First time on the MacBook, clone the repo:
-
-   ```sh
-   git clone https://github.com/dest1232/stickperson-poser.git
-   cd stickperson-poser
-   ```
-
-   On later visits, pull the latest Windows changes:
-
-   ```sh
-   cd /path/to/stickperson-poser
-   git pull
-   ```
-
-2. Convert the synced GLB to USDZ:
-
-   ```sh
-   ./scripts/prepare-ios-on-mac.sh
-   ```
-
-3. Open:
-
-   ```sh
-   open ios/StickpersonPoser/StickpersonPoser.xcodeproj
-   ```
-
-4. In Xcode:
-
-   - Choose a development team and bundle identifier.
-   - Run on iPhone/iPad simulator or device.
-   - Replace the placeholder app icon before App Store/TestFlight submission.
-   - Archive from Product > Archive when ready.
-
-## Sync Checklist
-
-After any web change, answer these before publishing native:
-
-- Did the GLB change? Run `sync-ios-assets.ps1` on Windows and `prepare-ios-on-mac.sh` on Mac.
-- Did handle names, parent hierarchy, pole vectors, or IK chains change? Mirror in `PoseSceneController.createHandles()`.
-- Did IK math change? Mirror in `IKSolver.swift`.
-- Did save/load pose shape change? Mirror in `RigTypes.swift` and `PoseStore.swift`.
-- Did visual styling change? Mirror lighting/material/UI in `PoseSceneController.swift` and `ContentView.swift`.
-- Did mobile UI change? Check iPhone portrait, iPhone landscape, and iPad in Xcode.
-
-## Current Known Native Gap
-
-This Windows workspace cannot generate a real `stickman_default.usdz`. The checked-in USDZ is a placeholder so the Xcode project has a stable file reference. Always replace it on macOS before running the app.
+The previous SwiftUI/SceneKit app and its conversion scripts are preserved in
+`legacy/SceneKit-iOS/` for reference only.

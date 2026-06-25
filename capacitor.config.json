@@ -1,0 +1,9 @@
+{
+  "appId": "com.local.StickpersonPoser",
+  "appName": "Stickperson Poser",
+  "webDir": "dist",
+  "ios": {
+    "contentInset": "never",
+    "preferredContentMode": "mobile"
+  }
+}

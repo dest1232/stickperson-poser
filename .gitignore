@@ -1,5 +1,6 @@
 # Dependencies
 node_modules/
+.node/
 
 # Logs
 *.log
@@ -21,6 +22,7 @@ Thumbs.db
 dist/
 build/
 DerivedData/
+DerivedData*/
 
 # Xcode user state
 *.xcuserstate
@@ -28,4 +30,3 @@ xcuserdata/
 
 # Swift Package Manager
 .build/
-

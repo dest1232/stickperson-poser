@@ -3,8 +3,8 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { TransformControls } from 'three/addons/controls/TransformControls.js';
 
-const MODEL_URL = '/public/stickman_parts.glb';
-const BASEPLATE_URL = '/public/default_baseplate.glb';
+const MODEL_URL = new URL('stickman_parts.glb', document.baseURI).href;
+const BASEPLATE_URL = new URL('default_baseplate.glb', document.baseURI).href;
 const STORAGE_KEY = 'stickperson-poser.savedPose.v1';
 const RAD_TO_DEG = 180 / Math.PI;
 const DEG_TO_RAD = Math.PI / 180;
@@ -188,7 +188,7 @@ const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 renderer.setClearColor(0x000000, 0);
 renderer.shadowMap.enabled = true;
-renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.shadowMap.type = THREE.PCFShadowMap;
 viewer.appendChild(renderer.domElement);
 
 scene.add(new THREE.HemisphereLight(0xe5f4ff, 0x7188aa, 1.6));

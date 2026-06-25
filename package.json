@@ -4,9 +4,19 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "python -m http.server 5173 --bind 127.0.0.1",
-    "sync:ios-assets": "powershell -ExecutionPolicy Bypass -File scripts/sync-ios-assets.ps1"
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "ios:sync": "npm run build && cap sync ios",
+    "ios:open": "cap open ios"
   },
-  "dependencies": {},
-  "devDependencies": {}
+  "dependencies": {
+    "@capacitor/core": "^7.6.7",
+    "@capacitor/ios": "^7.6.7",
+    "three": "^0.184.0"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^7.6.7",
+    "vite": "^8.1.0"
+  }
 }

@@ -1,59 +1,48 @@
 # Stickperson Poser
 
-This repo contains the Windows-friendly web prototype and a native iPhone/iPad app scaffold.
+The Three.js application is the product source of truth for both the browser
+and the iPhone/iPad app. Capacitor packages the production Vite build in a
+native iOS WKWebView.
 
-GitHub repo:
+## Web Development
 
-```text
-https://github.com/dest1232/stickperson-poser
-```
-
-## Web Prototype
-
-Run locally on Windows:
-
-```powershell
+```sh
+npm install
 npm run dev
 ```
 
-The browser app uses:
-
-- `index.html`
-- `src/`
-- `public/stickman_default.glb`
-
-## iPhone / iPad App
-
-The native SwiftUI + SceneKit app lives in:
-
-```text
-ios/StickpersonPoser/
-```
-
-First time on the MacBook:
+Create the offline production build with:
 
 ```sh
-git clone https://github.com/dest1232/stickperson-poser.git
-cd stickperson-poser
+npm run build
 ```
 
-After future Windows updates:
+The build output is written to `dist/` and includes Three.js and the required
+GLB assets.
+
+## iPhone and iPad
+
+On a Mac with Node.js 22 LTS:
 
 ```sh
-git pull
+npm install
+npm run ios:sync
+npm run ios:open
 ```
 
-When the GLB changes on Windows, sync it into the iOS project:
-
-```powershell
-npm run sync:ios-assets
-```
-
-On macOS, convert the synced GLB to USDZ before opening Xcode:
+If Node.js is not installed on the Mac, install the project-local toolchain:
 
 ```sh
-./scripts/prepare-ios-on-mac.sh
-open ios/StickpersonPoser/StickpersonPoser.xcodeproj
+./scripts/setup-mac-node.sh
+./scripts/use-project-node.sh npm install
+./scripts/use-project-node.sh npm run ios:sync
+./scripts/use-project-node.sh npm run ios:open
 ```
 
-See `APP_SYNC_WORKFLOW.md` for the full Windows-to-Mac update checklist.
+In Xcode, select the development team, choose an iPhone or iPad, and run the
+`App` scheme.
+
+The previous SwiftUI and SceneKit implementation remains available for
+reference in `legacy/SceneKit-iOS/`. It is not used by the production app.
+
+See `THREEJS_IOS_MIGRATION_PLAN.md` for the migration roadmap.

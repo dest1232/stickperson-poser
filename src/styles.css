@@ -5,10 +5,19 @@
     Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   font-synthesis: none;
   text-rendering: geometricPrecision;
+  overscroll-behavior: none;
+  -webkit-tap-highlight-color: transparent;
 }
 
 * {
   box-sizing: border-box;
+}
+
+html,
+body {
+  width: 100%;
+  height: 100%;
+  overscroll-behavior: none;
 }
 
 .iconSprite {
@@ -21,8 +30,11 @@
 body {
   margin: 0;
   min-width: 320px;
-  min-height: 100vh;
+  min-height: 100%;
   overflow: hidden;
+  touch-action: none;
+  user-select: none;
+  -webkit-touch-callout: none;
 }
 
 button,
@@ -34,7 +46,7 @@ input {
 .appShell {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 292px;
-  min-height: 100vh;
+  min-height: 100%;
   background:
     linear-gradient(90deg, rgba(255, 255, 255, 0.42), rgba(255, 255, 255, 0)),
     #e8e1d6;
